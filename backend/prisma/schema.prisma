@@ -1,0 +1,352 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  ADMIN
+  PROFESSOR
+  MONITOR
+  STUDENT
+}
+
+enum SessionType {
+  PRIVATE
+  GROUP
+  OFFICE_HOURS
+  STUDY_GROUP
+}
+
+enum SessionModality {
+  PRESENTIAL
+  ONLINE
+  HYBRID
+}
+
+enum SessionStatus {
+  DRAFT
+  PUBLISHED
+  FULL
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ParticipantStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+  ATTENDED
+  ABSENT
+}
+
+enum NotificationType {
+  REQUEST_ACCEPTED
+  REQUEST_REJECTED
+  SESSION_REMINDER
+  SESSION_UPDATED
+  SESSION_CANCELLED
+  NEW_REVIEW
+  MONITOR_ASSIGNED
+  GENERIC
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Char(36)
+  name         String    @db.VarChar(160)
+  email        String    @unique @db.VarChar(180)
+  passwordHash String    @db.VarChar(255)
+  role         Role      @default(STUDENT)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  refreshTokens RefreshToken[]
+  professor     Professor?
+  student       Student?
+  monitor       Monitor?
+  notifications Notification[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id                  String    @id @default(uuid()) @db.Char(36)
+  tokenHash           String    @unique @db.Char(64)
+  userId              String    @db.Char(36)
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  replacedByTokenHash String?   @db.Char(64)
+  userAgent           String?   @db.VarChar(255)
+  ipAddress           String?   @db.VarChar(45)
+  createdAt           DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Course {
+  id        String   @id @default(uuid()) @db.Char(36)
+  name      String   @db.VarChar(160)
+  code      String   @unique @db.VarChar(20)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subjectLinks SubjectCourse[]
+  students     Student[]
+
+  @@map("courses")
+}
+
+model Subject {
+  id        String   @id @default(uuid()) @db.Char(36)
+  name      String   @db.VarChar(160)
+  code      String   @unique @db.VarChar(20)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courseLinks    SubjectCourse[]
+  professorLinks ProfessorSubject[]
+  monitorLinks   SubjectMonitor[]
+
+  @@map("subjects")
+}
+
+/// Disciplina compartilhada entre cursos (ex.: BD para CC, SI e ES).
+model SubjectCourse {
+  subjectId String @db.Char(36)
+  courseId  String @db.Char(36)
+
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@id([subjectId, courseId])
+  @@index([courseId])
+  @@map("subject_courses")
+}
+
+model Professor {
+  id           String   @id @default(uuid()) @db.Char(36)
+  userId       String   @unique @db.Char(36)
+  registration String   @unique @db.VarChar(40)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectLinks   ProfessorSubject[]
+  monitorLinks   SubjectMonitor[]
+
+  @@map("professors")
+}
+
+model Student {
+  id           String   @id @default(uuid()) @db.Char(36)
+  userId       String   @unique @db.Char(36)
+  courseId     String   @db.Char(36)
+  registration String   @unique @db.VarChar(40)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course         Course               @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  monitor        Monitor?
+  participations SessionParticipant[]
+  reviews        Review[]
+
+  @@index([courseId])
+  @@map("students")
+}
+
+model Monitor {
+  id        String   @id @default(uuid()) @db.Char(36)
+  userId    String   @unique @db.Char(36)
+  studentId String   @unique @db.Char(36)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student      Student           @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  assignments  SubjectMonitor[]
+  reviews      Review[]
+
+  @@map("monitors")
+}
+
+/// Vinculo professor × disciplina em um periodo letivo (ex.: 2026.2).
+model ProfessorSubject {
+  id          String   @id @default(uuid()) @db.Char(36)
+  professorId String   @db.Char(36)
+  subjectId   String   @db.Char(36)
+  year        Int
+  semester    Int      @db.TinyInt
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  professor Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  subject   Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([professorId, subjectId, year, semester])
+  @@index([subjectId, year, semester])
+  @@map("professor_subjects")
+}
+
+/// Autorizacao do monitor nesta disciplina, com este professor, neste periodo.
+model SubjectMonitor {
+  id          String    @id @default(uuid()) @db.Char(36)
+  subjectId   String    @db.Char(36)
+  monitorId   String    @db.Char(36)
+  professorId String    @db.Char(36)
+  year        Int
+  semester    Int       @db.TinyInt
+  isActive    Boolean   @default(true)
+  approvedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  subject        Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  monitor        Monitor              @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  professor      Professor            @relation(fields: [professorId], references: [id], onDelete: Restrict)
+  sessions       MonitoringSession[]
+  availabilities MonitorAvailability[]
+
+  @@unique([monitorId, subjectId, year, semester])
+  @@index([subjectId, year, semester])
+  @@index([professorId])
+  @@map("subject_monitors")
+}
+
+model Room {
+  id        String   @id @default(uuid()) @db.Char(36)
+  name      String   @db.VarChar(120)
+  building  String   @db.VarChar(80)
+  floor     String   @db.VarChar(40)
+  capacity  Int
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions MonitoringSession[]
+
+  @@map("rooms")
+}
+
+model MonitorAvailability {
+  id               String          @id @default(uuid()) @db.Char(36)
+  subjectMonitorId String          @db.Char(36)
+  weekday          Int             @db.TinyInt
+  startTime        String          @db.VarChar(5)
+  endTime          String          @db.VarChar(5)
+  title            String          @db.VarChar(160)
+  topic            String?         @db.VarChar(160)
+  type             SessionType     @default(OFFICE_HOURS)
+  modality         SessionModality @default(PRESENTIAL)
+  maxParticipants  Int
+  roomId           String?         @db.Char(36)
+  meetingUrl       String?         @db.VarChar(500)
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  subjectMonitor SubjectMonitor @relation(fields: [subjectMonitorId], references: [id], onDelete: Cascade)
+
+  @@index([subjectMonitorId])
+  @@map("monitor_availabilities")
+}
+
+model MonitoringSession {
+  id               String         @id @default(uuid()) @db.Char(36)
+  subjectMonitorId String         @db.Char(36)
+  type             SessionType
+  modality         SessionModality
+  title            String         @db.VarChar(160)
+  description      String?        @db.VarChar(2000)
+  topic            String?        @db.VarChar(160)
+  startAt          DateTime
+  endAt            DateTime
+  maxParticipants  Int
+  roomId           String?        @db.Char(36)
+  meetingUrl       String?        @db.VarChar(500)
+  status           SessionStatus  @default(PUBLISHED)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  subjectMonitor SubjectMonitor       @relation(fields: [subjectMonitorId], references: [id], onDelete: Cascade)
+  room           Room?                @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  participants   SessionParticipant[]
+  reviews        Review[]
+
+  @@index([subjectMonitorId])
+  @@index([startAt, endAt])
+  @@index([status])
+  @@index([roomId])
+  @@map("monitoring_sessions")
+}
+
+model SessionParticipant {
+  id          String            @id @default(uuid()) @db.Char(36)
+  sessionId   String            @db.Char(36)
+  studentId   String            @db.Char(36)
+  status      ParticipantStatus @default(PENDING)
+  requestedAt DateTime          @default(now())
+  confirmedAt DateTime?
+  attendedAt  DateTime?
+  cancelledAt DateTime?
+
+  session MonitoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+  @@index([status])
+  @@map("session_participants")
+}
+
+model Review {
+  id             String   @id @default(uuid()) @db.Char(36)
+  sessionId      String   @db.Char(36)
+  studentId      String   @db.Char(36)
+  monitorId      String   @db.Char(36)
+  rating         Int      @db.TinyInt
+  clarity        Int      @db.TinyInt
+  punctuality    Int      @db.TinyInt
+  mastery        Int      @db.TinyInt
+  comment        String?  @db.VarChar(1000)
+  isAnonymous    Boolean  @default(true)
+  publishComment Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  session MonitoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  monitor Monitor           @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@index([monitorId])
+  @@map("reviews")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Char(36)
+  userId    String           @db.Char(36)
+  type      NotificationType @default(GENERIC)
+  title     String           @db.VarChar(160)
+  message   String           @db.VarChar(500)
+  link      String?          @db.VarChar(255)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}

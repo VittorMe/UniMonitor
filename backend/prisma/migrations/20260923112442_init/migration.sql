@@ -1,0 +1,37 @@
+-- CreateTable
+CREATE TABLE `users` (
+    `id` CHAR(36) NOT NULL,
+    `name` VARCHAR(160) NOT NULL,
+    `email` VARCHAR(180) NOT NULL,
+    `passwordHash` VARCHAR(255) NOT NULL,
+    `role` ENUM('ADMIN', 'MANAGER', 'OPERATOR', 'VIEWER') NOT NULL DEFAULT 'VIEWER',
+    `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `lastLoginAt` DATETIME(3) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX `users_email_key`(`email`),
+    INDEX `users_role_idx`(`role`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `refresh_tokens` (
+    `id` CHAR(36) NOT NULL,
+    `tokenHash` CHAR(64) NOT NULL,
+    `userId` CHAR(36) NOT NULL,
+    `expiresAt` DATETIME(3) NOT NULL,
+    `revokedAt` DATETIME(3) NULL,
+    `replacedByTokenHash` CHAR(64) NULL,
+    `userAgent` VARCHAR(255) NULL,
+    `ipAddress` VARCHAR(45) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `refresh_tokens_tokenHash_key`(`tokenHash`),
+    INDEX `refresh_tokens_userId_idx`(`userId`),
+    INDEX `refresh_tokens_expiresAt_idx`(`expiresAt`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `refresh_tokens` ADD CONSTRAINT `refresh_tokens_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
