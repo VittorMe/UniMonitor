@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 
+
 export const ForbiddenPage = () => (
   <div className="centered-page">
     <h1>Sem permissao</h1>

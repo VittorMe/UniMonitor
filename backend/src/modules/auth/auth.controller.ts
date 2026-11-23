@@ -8,6 +8,7 @@ import { authService, type AuthResult, type SessionContext } from './auth.servic
 import { signAccessToken } from './token.service.js';
 import type { ChangePasswordInput, LoginInput, RegisterInput, UpdateProfileInput } from './auth.schemas.js';
 
+
 const sessionContext = (req: Request): SessionContext => ({
   ...(req.headers['user-agent'] ? { userAgent: req.headers['user-agent'] } : {}),
   ...(req.ip ? { ipAddress: req.ip } : {}),
