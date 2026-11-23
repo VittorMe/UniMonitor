@@ -345,7 +345,12 @@ export const SubjectsPage = () => {
             ))}
           </div>
         </fieldset>
-        <button className="button button-primary" type="submit" disabled={form.courseIds.length === 0 || create.isPending}>
+        <button
+          className="button button-primary"
+          type="submit"
+          style={{ alignSelf: 'start' }}
+          disabled={form.courseIds.length === 0 || create.isPending}
+        >
           Cadastrar
         </button>
       </form>
